@@ -208,7 +208,15 @@ inline constexpr Robot configuration = [] {
     // proven; if it is wrong, the first wheel check on blocks shows the opposite
     // pair moving and the two channels below are swapped.
     // Radio: the handheld displays RADIO CHANNEL 1 (seen by the team, 12 Nov 2026).
+    // On the robot build the team number and channel come straight from
+    // platformio.ini (stamped by the project wizard), so the two can never
+    // disagree and break the build when the real team number is entered.
+#if defined(NRL_TEAM_NUMBER) && defined(NRL_WIFI_CHANNEL)
+    r.team.number = NRL_TEAM_NUMBER;
+    r.team.channel = NRL_WIFI_CHANNEL;
+#else
     r.team.channel = 1;
+#endif
     r.team.channelVerified = true;
     r.drive.pairedSocketsVerified = true;
     r.drive.groupObserved[FrontLeft] = r.drive.groupObserved[RearLeft] = Status::Verified;   // pair proven by the test; printed "MOTOR 1" label not yet read
