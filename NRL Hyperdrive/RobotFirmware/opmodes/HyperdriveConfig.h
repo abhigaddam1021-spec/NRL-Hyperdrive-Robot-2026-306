@@ -270,6 +270,10 @@ inline constexpr Robot configuration = [] {
     // The driver chip is unidentified, so nothing above 50 is supported.
     r.drive.maxPwm = 50;
     r.drive.driverCapacityVerified = true;   // for outputs up to 50 only, by that test
+    // Floor 11: the SDK motor driver (HexaDCMotor.h, MOTOR_DEADBAND = 10) turns
+    // every command from -10 to +10 into zero. Without a floor the first fifth
+    // of stick travel past the dead zone produced no output at all.
+    r.drive.minPwm = 11;
     // Steering -1: the team saw, under the factory application, right stick =
     // RF/RB forward + LF/LB backward = nose swings right. This mixer adds
     // steering to the L-labelled pair, so right stick must be negative here.

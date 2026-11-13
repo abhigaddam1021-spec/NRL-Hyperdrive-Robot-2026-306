@@ -240,7 +240,13 @@ class TeleOp : public NRLOpMode {
         }
         if (now - since < waitMs) return;
         switch (phase) {
-            case Phase::Settling: complete(now, owner == Owner::Safety ? "ready" : "complete"); break;
+            case Phase::Settling:
+                // Only a servo was being waited on. The wheels may already be under
+                // manual control, so do not stop them or ask for neutral again.
+                markSettled();
+                initiatingKey = 0;
+                enter(Phase::Idle, Owner::None, now, 0, owner == Owner::Safety ? "ready" : "complete");
+                break;
             case Phase::Lowering:   // lowering interval over: only now does the dwell start
                 craneS.settled = true;
                 enter(Phase::Dwell, Owner::Pickup, now, R.pickup.dwellMs, "dwell");
@@ -408,9 +414,21 @@ public:
 
         // 5. running action
         if (phase != Phase::Idle) {
-            const bool takeover = driving || (keys & ~initiatingKey) || rising;
+            // Settling only waits for a servo to finish travelling; it does not
+            // own the wheels. Driving is therefore allowed during it (after a
+            // fresh neutral) instead of locking the driver out for up to 6 s.
+            const bool servoWait = phase == Phase::Settling;
+            const bool takeover = (driving && !servoWait) || (keys & ~initiatingKey) || rising;
             if (takeover && owner != Owner::Safety) { cancel(now); return; }
             advance(now);
+            if (!servoWait || phase != Phase::Settling) return;
+            if (fresh && !keys && !driving) neutralSeen = true;
+            if (keys) { neutralSeen = false; stopDrive(); return; }   // buttons act only when Idle
+            if (driveReady && neutralSeen) {
+                const Mix m = mix(f * R.drive.throttleSign, t * R.drive.steeringSign);
+                driveToward(toPwm(m.left, R.drive.minPwm, R.drive.maxPwm),
+                            toPwm(m.right, R.drive.minPwm, R.drive.maxPwm), dt);
+            }
             return;
         }
 

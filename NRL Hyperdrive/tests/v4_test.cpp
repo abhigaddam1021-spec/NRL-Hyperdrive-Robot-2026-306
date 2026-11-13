@@ -572,7 +572,7 @@ int main() {
         frame(op, BTN_LT); CHECK(attached == 0 && op.currentPhase() == Phase::Off);
         CHECK(fixture::begins == m); });                                             // no motor output in this configuration
     X(11, "DELIVERED IMAGE: drive capped at 50 plus LB claw and RB crane, all stops intact", {
-        static_assert(configuration.drive.enabled && configuration.drive.maxPwm == 50 && configuration.drive.minPwm == 0 && logicalOutputs(configuration.drive) == 2);
+        static_assert(configuration.drive.enabled && configuration.drive.maxPwm == 50 && configuration.drive.minPwm == 11 && logicalOutputs(configuration.drive) == 2);
         static_assert(configuration.drive.throttleSign == 1 && configuration.drive.steeringSign == -1 && configuration.drive.deadband == 0.10f);
         const int sb = begins, m = fixture::begins;
         auto L = [] { return fixture::pwmByPin[MOTOR_L_DIR]; }; auto R = [] { return fixture::pwmByPin[MOTOR_R_DIR]; };
@@ -609,11 +609,26 @@ int main() {
         for (int a : {angle[SERVO_1], angle[SERVO_2]}) CHECK(a >= 30 && a <= 120);
         CHECK(begins == sb + 2);                                                 // no third servo, ever
         for (int p : {MOTOR_3_DIR, MOTOR_4_DIR}) CHECK(fixture::pwmByPin[p] == 0); });
+    X(12, "DELIVERED IMAGE: wheels stay drivable while a servo is only being waited on", {
+        auto L = [] { return fixture::pwmByPin[MOTOR_L_DIR]; }; auto R = [] { return fixture::pwmByPin[MOTOR_R_DIR]; };
+        HyperdriveTeleOp op; op.init(); op.start();
+        frame(op); CHECK(attached == 2 && op.currentPhase() == Phase::Settling);  // armed, start-up wait running
+        frame(op); frame(op, 0, 1, 1); CHECK(L() == -50 && R() == 50);           // neutral seen: drive works at once
+        frame(op, 0, 1, .15f); CHECK(L() == -17 && R() == 17);                   // small stick clears the SDK's +-10 dead zone
+        const int w = writes;
+        frame(op, BTN_LB, 1, 1); CHECK(L() == 0 && R() == 0 && writes == w);     // buttons still wait for Idle
+        frame(op); elapsed(op, 6000); frame(op); CHECK(op.currentPhase() == Phase::Idle);
+        frame(op, BTN_RB); CHECK(angle[SERVO_2] == 120 && L() == 0);             // crane starts down
+        frame(op, BTN_RB, 1, 1); CHECK(L() == 0);                                // button still held: no drive
+        frame(op); frame(op, 0, 1, 1);
+        CHECK(L() == -50 && R() == 50 && op.currentPhase() == Phase::Settling && angle[SERVO_2] == 120);   // driving during the crane wait
+        elapsed(op, 6000, 0, 1); CHECK(op.currentPhase() == Phase::Idle && L() == -50 && R() == 50);       // wait ends without a jerk
+        frame(op, BTN_LT); CHECK(attached == 0 && L() == 0 && R() == 0); });
     X(4, "confirmed socket order is fixed in the configuration", {
         static_assert(configuration.drive.wheel[RearRight].socket == 1 && configuration.drive.wheel[FrontRight].socket == 2);
         static_assert(configuration.drive.wheel[FrontLeft].socket == 3 && configuration.drive.wheel[RearLeft].socket == 4);
         static_assert(configuration.grip.pin == SERVO_1 && configuration.grip.first == 85 && configuration.grip.second == 120);
         static_assert(configuration.crane.pin == SERVO_2 && configuration.crane.first == 30 && configuration.pickup.dwellMs == 500); });
 
-    printf("PASS: HYPERDRIVE V4 host suite - %d cases (96 directive + 11 extra)\n", passed);
+    printf("PASS: HYPERDRIVE V4 host suite - %d cases (96 directive + 12 extra)\n", passed);
 }
